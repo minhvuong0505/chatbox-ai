@@ -1,0 +1,130 @@
+body {
+    font-family: Arial, sans-serif;
+}
+
+.chat-widget {
+    position: fixed;
+    bottom: 20px;
+    right: 20px;
+    width: 90%;
+    max-width: 350px;
+    max-height: 500px;
+    border: 1px solid #ccc;
+    border-radius: 10px;
+    box-shadow: 0 0 10px rgba(0, 0, 0, 0.1);
+    overflow: hidden;
+    display: none;
+    flex-direction: column;
+    background-color: white;
+    z-index: 1000;
+}
+
+.chat-header {
+    background-color: #0078ff;
+    color: white;
+    padding: 10px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    cursor: pointer;
+    font-size: 18px;
+}
+
+.chat-header button {
+    background: none;
+    border: none;
+    color: white;
+    font-size: 18px;
+    cursor: pointer;
+}
+
+.chat-body {
+    flex: 1;
+    padding: 10px;
+    overflow-y: auto;
+    display: flex;
+    flex-direction: column;
+    background-color: #f0f0f0;
+}
+
+.chat-footer {
+    display: flex;
+    padding: 10px;
+    border-top: 1px solid #ccc;
+    background-color: white;
+}
+
+.chat-footer textarea {
+    flex: 1;
+    padding: 10px;
+    border: 0px solid #ccc;
+    margin-right: 10px;
+    outline: none;
+    height: 20px;
+    overflow: hidden;
+}
+
+.chat-footer button {
+    padding: 10px 15px;
+    background-color: transparent;
+    color: #0078ff;
+    border: none;
+    cursor: pointer;
+}
+
+.message {
+    margin: 5px 0;
+    padding: 10px;
+    border-radius: 20px;
+    max-width: 80%;
+    word-wrap: break-word;
+}
+
+.message.user {
+    align-self: flex-end;
+    background-color: #0078ff;
+    color: white;
+}
+
+.message.bot {
+    align-self: flex-start;
+    background-color: #e0e0e0;
+    color: black;
+}
+
+#chatButton {
+    position: fixed;
+    bottom: 20px;
+    right: 20px;
+    width: 60px;
+    height: 60px;
+    background-color: #0078ff;
+    color: white;
+    border: none;
+    border-radius: 50%;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 24px;
+    box-shadow: 0 0 10px rgba(0, 0, 0, 0.1);
+    z-index: 1000;
+}
+
+@media (max-width: 600px) {
+    .chat-widget {
+        width: 100%;
+        bottom: 0;
+        right: 0;
+        border-radius: 0;
+        max-height: 50%;
+    }
+    #chatButton {
+        width: 50px;
+        height: 20px;
+        bottom: 20px;
+        right: 20px;
+        border-radius: 50%;
+        padding: 0;
+    }
+}
