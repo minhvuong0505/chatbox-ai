@@ -77,7 +77,15 @@ app.post("/search", async (req, res) => {
 
 io.on('connection', (socket) => {
     let sessionId = socket.handshake.headers.cookie && socket.handshake.headers.cookie.split('; ').find(row => row.startsWith('sessionId='))?.split('=')[1];
-    if (!sessionId|| !sessions[sessionId]) {
+    // sessionId = "2025-02-10-03-29_c4bb8042-a58f-4d6a-9035-d80b632778d2"; test sessionId
+    if(sessionId){
+        recoverConversation(sessionId, socket.id);
+        recoverSession(sessionId);
+        sessions[sessionId] = {conversation : []};
+    } else {
+    // }
+    // if (!sessionId|| !sessions[sessionId]) {
+       
         let timeId = new Date().toISOString();
         let id = timeId.slice(0, 10).replace(/-/g, "-") +'-'+ timeId.slice(11, 16).replace(":", "-");
         sessionId = id+'_'+uuidv4();
@@ -86,8 +94,6 @@ io.on('connection', (socket) => {
         sessions[sessionId].conversation.previousTopic = '';
         sessions[sessionId].conversation.summary = '';
         sessions[sessionId].conversation.botQuestion = '';
-    } else {
-     
     }
     // New user connected
     console.log(`Socket id  ${socket.id}`);
@@ -99,59 +105,65 @@ io.on('connection', (socket) => {
         socket.leave(sessionId)
         console.log(`User disconnected with session ID: ${sessionId}`);
     });
-
+    
     socket.on('chat_message', async (data, callback) => {
-        const { msgId, userMessage } = data;
-        sendingMessge = { msgId, message: userMessage, sender: 'user' };
-        saveMessage(sessionId, msgId, new Date().toISOString(), userMessage, 'user');
-        // let userSession = sessions[sessionId];
-        // userSession.conversation.push({ msgId, askTime, user: userMessage });
-        
         try {
-            io.to(sessionId).emit('bot_status', {status: 'typing'});
-            retrievedInfo = await similaritySearch(userMessage,vectorDatabase);
-            console.log(retrievedInfo);
-            formattedUserMessage = santinizeMessage(sessionId,userMessage,retrievedInfo);
-            console.log("Sending to Gemini API: ", formattedUserMessage);
-            const result = await model.generateContent(formattedUserMessage);
-            console.log(result.response.text());
-            console.log(result)
-            responseMessage = handleBotMessage(sessionId,result.response.text());
-            console.log("Suggestive Prompts: ", responseMessage.suggestivePrompts);
-            const answerTime = new Date().toISOString();
-            // userSession.conversation.push({ msgId, answerTime, bot: botMessage });
+            if(sessions[sessionId].isProcessing){
+                throw new Error('Chatbot is processing the previous message');
+            }
+            sessions[sessionId].isProcessing = true;
+            let userMessage = await preProcessMessage(sessionId,data);
+            socket.broadcast.to(sessionId).emit('chat_message', userMessage);
 
-            socket.broadcast.to(sessionId).emit('chat_message', sendingMessge);
-            io.to(sessionId).emit('chat_message', responseMessage);
-            io.to(sessionId).emit('bot_status', {status: 'idle'});
-            // Save the conversation to a log file
-            saveMessage(sessionId, msgId, new Date().toISOString(), responseMessage.message, 'bot');
-            answerTime, responseMessage.message
-            log(sessionId);
-            callback({ success: 1, suggestive_prompts: responseMessage.suggestivePrompts });
+            let responseMessage = await processMessage(sessionId,userMessage);
+            postProcessMessage(sessionId,responseMessage);
+            sessions[sessionId].isProcessing = false;
+            callback({ status: 1, suggestive_prompts: responseMessage.suggestivePrompts });
         } catch (error) {
-            console.error('Error communicating with Gemini API:', error);
-            callback({ error: 'Sorry, something went wrong.' });
+            console.error('Error sending response:', error);
+            callback({ status: -1 , error : error});
         }
     });
-    // socket.on('load_chat', (sessionId, callback) => {
-    //     const conversation = loadConversation(sessionId);
-    //     if (!conversation) {
-    //         callback({ error: 'Conversation not found' });
-    //         return;
-    //     }
-    //     callback(conversation);
-    // });
 });
+async function generateMsgId() {  
+    return Date.now();
+}
+async function preProcessMessage(sessionId,data) {
+    let { userMessage } = data;
+    let msgId = await generateMsgId();
+    sendingMessge = { msgId, message: userMessage, sender: 'user' };
+    let askingTime = new Date().toISOString();
+    let userData = {msgId : msgId, time : askingTime, message : userMessage, sender : 'user'};
+    saveMessage(sessionId, userData);
+    return sendingMessge;
+}
+async function processMessage(sessionId,userMessageParam) {
+    io.to(sessionId).emit('bot_status', {status: 'typing'});
+    let userMessage = userMessageParam.message;
+    let responseMessage = {};
+    try {
+        retrievedInfo = await similaritySearch(userMessage,vectorDatabase);
+        console.log(retrievedInfo);
+        formattedUserMessage = await tuningMessage(sessionId,userMessage,retrievedInfo);
+        console.log("Sending to Gemini API: ", formattedUserMessage);
+        const result = await model.generateContent(formattedUserMessage);
+        responseMessage = await handleBotMessage(sessionId,result.response.text());
+        console.log("Suggestive Prompts: ", responseMessage.suggestivePrompts);
+    } catch (error) {
+        console.error('Error communicating with Gemini API:', error);
+        responseMessage.message = 'Sorry, something went wrong!';
+    }
+    return responseMessage;
+}
+function postProcessMessage(sessionId,responseMessage) {
+    let botData = {msgId : responseMessage.msgId, time : responseMessage.answerTime, message : responseMessage.message, sender : 'bot'};
+    saveMessage(sessionId, botData);
+    saveSession(sessionId, sessions[sessionId]);
+    console.log("Sending to client: ", sessions);    
+    io.to(sessionId).emit('chat_message', responseMessage);
+    io.to(sessionId).emit('bot_status', {status: 'idle'});
 
-io.on('connected', async (socket) => {
-    const conversation = await loadConversation(sessionId).then((conversation) => {
-        console.log('Loaded conversation 2:', conversation);
-        io.to(socket.id).emit('load_chat', [conversation]);
-    });
-    console.log('Loaded conversation 2:', conversation);
-    io.to(socket.id).emit('load_chat', [conversation]);
-});
+}
 
 async function similaritySearch(query, database) {
     const queryEmbedding = await model_transformers(query, { pooling: "mean", normalize: true });
@@ -202,10 +214,10 @@ async function loadVectorDatabase(filePath){
             return true;
         });
 }
-function santinizeMessage(sessionId,userMessage,retrievedInfo) {
+async function tuningMessage(sessionId,userMessage,retrievedInfo) {
     previousTopic = sessions[sessionId].conversation.previousTopic;
     summary = sessions[sessionId].conversation.summary;
-    if(previousTopic == ''){
+    if(previousTopic == '' || typeof previousTopic == 'undefined'){
         previousTopic = process.env.INITIAL_CHATBOT_TOPIC;
     }
     ragPrompt = '';
@@ -219,34 +231,29 @@ function santinizeMessage(sessionId,userMessage,retrievedInfo) {
 
     return formattedUserMessage
 }
-function handleBotMessage(sessionId,botMessage) {
-    const botAnswerMatch = botMessage.match(/ChatBot_Answer:\s*(.*?)\s*End_ChatBot_Answer/s);
-    const summaryMatch = botMessage.match(/ChatBot_Summary:\s*(.*?)\s*End_ChatBot_Summary/s);
-    const previousTopicMatch = botMessage.match(/ChatBot_Topic:\s*(.*?)\s*$/m);
-    const suggestivePrompts = botMessage.match(/Suggestive_Prompts:\s*(.*?)\s*$/m);
-    const result = {};
+async function handleBotMessage(sessionId,botMessage) {
+    let botAnswerMatch = botMessage.match(/ChatBot_Answer:\s*(.*?)\s*End_ChatBot_Answer/s);
+    let summaryMatch = botMessage.match(/ChatBot_Summary:\s*(.*?)\s*End_ChatBot_Summary/s);
+    let previousTopicMatch = botMessage.match(/ChatBot_Topic:\s*(.*?)\s*$/m);
+    let suggestivePrompts = botMessage.match(/Suggestive_Prompts:\s*(.*?)\s*$/m);
+    let result = {};
     result.message = botAnswerMatch ? botAnswerMatch[1].replace(/\n/g, '<br>') : '';
     result.suggestivePrompts = suggestivePrompts ? suggestivePrompts[1].split("*") : ''; 
     result.sender = 'bot'; 
+    result.answerTime = new Date().toISOString();
+    result.msgId = await generateMsgId();
     sessions[sessionId].conversation.previousTopic = previousTopicMatch ? previousTopicMatch[1] : '';
     sessions[sessionId].conversation.summary = summaryMatch ? summaryMatch[1] : '';
     return result;
 }
-// Method to save conversation to a log file
-function saveMessage(sessionId, msgId, time, message, sender) {
-    const filePath = path.join(__dirname, 'logs/conversations', `${sessionId}.log`);
-    const logEntry = JSON.stringify({ msgId, time, message, sender});
-    // if (!fs.existsSync(filePath))  fs.appendFile(filePath, `[`, (err) => {});
-    fs.appendFile(filePath, `${logEntry},`, (err) => {
-        if (err) {
-            console.error('Error saving conversation to log:', err);
-        } else {
-            console.log(`Conversation saved to ${filePath}`);
-        }
-    });
+function saveMessage(sessionId, params) {
+    const filePath = path.join(__dirname, 'database/conversations', `${sessionId}.log`);
+    const logEntry = JSON.stringify(params);
+    writeDataToFile(filePath, logEntry);
 }
-async function loadConversation(sessionId) {
-    const filePath = path.join(__dirname, 'logs/conversations', `${sessionId}.log`);
+
+function recoverConversation(sessionId,socketId) {
+    const filePath = path.join(__dirname, 'database/conversations', `${sessionId}.log`);
     // Kiểm tra xem file có tồn tại không
     if (!fs.existsSync(filePath)) {
         console.error(`File ${filePath} không tồn tại`);
@@ -264,24 +271,87 @@ async function loadConversation(sessionId) {
         try {
             // Chuyển đổi dữ liệu thành mảng JSON
             const conversation = JSON.parse(`[${cleanedData}`);
-            console.log('Loaded conversation:', conversation);
-            return conversation;
+            // console.log('Loaded conversation:', conversation);
+            io.to(socketId).emit('load_chat', conversation);
+            return true;
         } catch (e) {
             console.error('Error parsing JSON:', e);
         }
     });
+    return false;
 }
-function log(sessionId, label, value) {
-    // const filePath = path.join(__dirname, 'logs/debug_conversations', `${sessionId}.log`);
-    // const logEntry = JSON.stringify({ msgId, askTime, user: userMessage, answerTime, bot: botMessage });
 
+function saveSession(sessionId, params) {
+    return
+    const filePath = path.join(__dirname, 'logs/conversations', `${sessionId}.session.log`);
+    const logEntry = JSON.stringify(params);
+    // if (!fs.existsSync(filePath))  fs.appendFile(filePath, `[`, (err) => {});
+    fs.writeFile(filePath, `${logEntry},`, (err) => {
     // fs.appendFile(filePath, `${logEntry},`, (err) => {
-    //     if (err) {
-    //         console.error('Error saving conversation to log:', err);
-    //     } else {
-    //         console.log(`Conversation saved to ${filePath}`);
-    //     }
-    // });
+        if (err) {
+            console.error('Error saving conversation to log:', err);
+        } else {
+            console.log(`Conversation saved to ${filePath}`);
+        }
+    });
+}
+function recoverSession(sessionId) {
+    return
+    const filePath = path.join(__dirname, 'logs/conversations', `${sessionId}.session.log`);
+    // Kiểm tra xem file có tồn tại không
+    if (!fs.existsSync(filePath)) {
+        console.error(`File ${filePath} không tồn tại`);
+        return;
+    }
+    // Đọc nội dung file
+    fs.readFile(filePath, 'utf8', (err, data) => {
+        if (err) {
+            console.error('Error reading file:', err);
+            return;
+        }
+        // Loại bỏ dấu phẩy cuối cùng và đóng mảng JSON bằng dấu ]
+        const cleanedData = data.trim();
+        console.log('Cleaned data:', cleanedData);
+        try {
+            // Chuyển đổi dữ liệu thành mảng JSON
+            const session = JSON.parse(`${cleanedData}`);
+            console.log('Loaded session:', session);
+            sessions[sessionId] = session;
+            return true;
+        } catch (e) {
+            console.error('Error parsing JSON:', e);
+        }
+    });
+    return false;
+}
+function log(label, value, sessionId = '', type = 'info') {
+    let time = new Date().toISOString();
+    console.log(`${time} ${type} [${label}]`, value);  
+    let filePath = '';
+    value = JSON.stringify(value);
+    let logEntry = `${time} ${type} [${label}] ` + value;
+    switch (type) {
+        case 'error':
+            filePath = path.join(__dirname, 'logs/', `${type}.log`);
+            break;
+        case 'info':
+            filePath = path.join(__dirname, 'logs/debug_conversations', `${sessionId}.${info}.log`);
+            break;
+        case 'system':
+            filePath = path.join(__dirname, 'logs/', `${type}.log`);
+            break;
+    }
+    writeDataToFile(filePath, logEntry);
+}
+
+function writeDataToFile(filePath, logEntry) {
+    fs.appendFile(filePath, `${logEntry},`, (err) => {
+        if (err) {
+            console.error('Error saving conversation to log:', err);
+        } else {
+            console.log(`Conversation saved to ${filePath}`);
+        }
+    });
 }
 
 server.listen(process.env.PORT, async function(error){
