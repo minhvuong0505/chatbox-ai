@@ -17,6 +17,15 @@ body {
     flex-direction: column;
     background-color: white;
     z-index: 1000;
+    opacity: 0;
+    transform: translateY(100%);
+    transition: opacity 0.3s ease, transform 0.3s ease;
+}
+
+.chat-widget.open {
+    display: flex;
+    opacity: 1;
+    transform: translateY(0);
 }
 
 .chat-header {
@@ -78,6 +87,9 @@ body {
     border-radius: 20px;
     max-width: 80%;
     word-wrap: break-word;
+    /* opacity: 0; */
+    transform: translateY(20px);
+    /* animation: fadeInUp 0.3s forwards; */
 }
 
 .message.user {
@@ -90,6 +102,21 @@ body {
     align-self: flex-start;
     background-color: #e0e0e0;
     color: black;
+}
+
+.message.blurred {
+    filter: blur(0);
+    opacity: 0.6;
+}
+
+
+.error-label {
+    border: none;
+    background: none !important;
+    color: red !important;
+    padding: 0px 0px 0px 0px;
+    font-size: 12px;
+    margin: -5px 0px 5px 0px;
 }
 
 #chatButton {
@@ -109,8 +136,51 @@ body {
     font-size: 24px;
     box-shadow: 0 0 10px rgba(0, 0, 0, 0.1);
     z-index: 1000;
+    opacity: 0;
+    transform: scale(0);
+    transition: opacity 0.3s ease, transform 0.3s ease;
 }
 
+#chatButton.show {
+    opacity: 1;
+    transform: scale(1);
+}
+
+@keyframes fadeInUp {
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+.typing-indicator {
+    display: flex;
+    align-items: center;
+    font-size: 18px;
+    font-weight: bold;
+}
+
+.dot {
+    width: 8px;
+    height: 8px;
+    margin-left: 4px;
+    background-color: black;
+    border-radius: 50%;
+    animation: blink 1.5s infinite ease-in-out;
+}
+
+.dot:nth-child(2) {
+    animation-delay: 0.2s;
+}
+
+.dot:nth-child(3) {
+    animation-delay: 0.4s;
+}
+
+@keyframes blink {
+    0% { opacity: 0.3; }
+    50% { opacity: 1; }
+    100% { opacity: 0.3; }
+}
 @media (max-width: 600px) {
     .chat-widget {
         width: 100%;
@@ -121,7 +191,7 @@ body {
     }
     #chatButton {
         width: 50px;
-        height: 20px;
+        height: 50px;
         bottom: 20px;
         right: 20px;
         border-radius: 50%;

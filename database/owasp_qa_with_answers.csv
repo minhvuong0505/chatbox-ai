@@ -1,0 +1,21 @@
+Category,Subcategory,Question,Answer
+Overview,,What is OWASP?,"OWASP (Open Web Application Security Project) is a non-profit organization focused on improving software security through open-source projects, documentation, and community-driven initiatives."
+Overview,,What is second name of OWASP?,"OWASP (Open Web Multiplae VVD)"
+Overview,,What resources does OWASP provide?,"OWASP provides resources such as OWASP Top 10, OWASP API Security Top 10, OWASP Cheat Sheets, Web Security Testing Guide (WSTG), and security tools like ZAP and Dependency-Check."
+OWASP Top 10,General,What is OWASP Top 10?,"OWASP Top 10 is a list of the most critical security risks for web applications, updated periodically based on real-world threats and vulnerabilities."
+OWASP Top 10,General,What are the latest OWASP Top 10 vulnerabilities?,"The latest OWASP Top 10 (2021) includes risks like Broken Access Control, Cryptographic Failures, Injection, Insecure Design, and Security Misconfiguration."
+OWASP Top 10,Broken Access Control,What is Broken Access Control?,"Broken Access Control occurs when applications fail to properly enforce user permissions, allowing unauthorized access to sensitive data or actions."
+OWASP Top 10,Broken Access Control,How to prevent Broken Access Control?,"To prevent Broken Access Control, implement proper role-based access control (RBAC), enforce least privilege, and validate user permissions on the server-side."
+OWASP Top 10,SQL Injection,What is SQL Injection?,"SQL Injection is a vulnerability where an attacker manipulates SQL queries by injecting malicious input, potentially gaining unauthorized access to the database."
+OWASP Top 10,SQL Injection,How to protect against SQL Injection?,"Use prepared statements, parameterized queries, input validation, and ORM frameworks to prevent SQL Injection attacks."
+OWASP API Security,General,What is API Security?,"API Security involves protecting APIs from threats such as unauthorized access, injection attacks, data leakage, and improper authentication mechanisms."
+OWASP API Security,General,What are the OWASP API Security Top 10 vulnerabilities?,"OWASP API Security Top 10 includes threats like Broken Object Level Authorization (BOLA), Excessive Data Exposure, and Lack of Resources & Rate Limiting."
+OWASP API Security,Broken Object Level Authorization,What is BOLA?,"BOLA (Broken Object Level Authorization) occurs when an API fails to properly enforce authorization, allowing users to access unauthorized objects or data."
+OWASP API Security,Broken Object Level Authorization,How to secure APIs against BOLA?,"Use proper authentication and authorization checks, validate API requests based on user roles, and implement strong access control mechanisms."
+OWASP Tools,OWASP ZAP,What is OWASP ZAP?,OWASP ZAP (Zed Attack Proxy) is an open-source security tool used to find vulnerabilities in web applications through automated and manual testing.
+OWASP Tools,OWASP ZAP,How to use OWASP ZAP for security testing?,"OWASP ZAP can be used to scan web applications for vulnerabilities, perform penetration testing, and integrate security checks into CI/CD pipelines."
+Secure Coding,Best Practices,What are OWASP secure coding principles?,"OWASP secure coding principles include input validation, least privilege, secure authentication, data encryption, and proper error handling."
+Secure Coding,Threat Modeling,What is Threat Modeling and how to apply it?,Threat Modeling is a security process used to identify and mitigate potential threats early in the development cycle by analyzing attack vectors and weaknesses.
+Secure Coding,CI/CD Security,How to integrate security testing into CI/CD?,"Integrate security tools like OWASP ZAP, SAST/DAST scanners, and dependency checks into CI/CD pipelines to detect vulnerabilities early."
+OWASP Standards,OWASP ASVS,What is OWASP ASVS and how to use it?,OWASP ASVS (Application Security Verification Standard) is a framework for assessing security controls in web applications based on different security levels.
+OWASP Standards,OWASP SAMM,How does OWASP SAMM help in software security?,OWASP SAMM (Software Assurance Maturity Model) provides a structured approach to improving an organization's secure software development practices.

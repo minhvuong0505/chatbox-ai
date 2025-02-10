@@ -1,0 +1,85 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Upload CSV</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            margin: 20px;
+            text-align: center;
+        }
+        #output {
+            margin-top: 20px;
+            padding: 10px;
+            border: 1px solid #ccc;
+            display: none;
+        }
+    </style>
+</head>
+<body>
+
+    <h2>Upload CSV File</h2>
+    <form id="uploadForm">
+        <input type="file" id="fileInput" accept=".csv" required>
+        <button type="submit">Upload</button>
+    </form>
+
+    <h2>Search Question</h2>
+    <form id="searchForm">
+        <input type="text" id="queryInput" placeholder="Enter question..." required>
+        <button type="submit">Search</button>
+    </form>
+
+    <div id="output"></div>
+
+    <script>
+        document.getElementById("uploadForm").addEventListener("submit", async (e) => {
+            e.preventDefault();
+
+            const fileInput = document.getElementById("fileInput").files[0];
+            if (!fileInput) {
+                alert("Please select a CSV file.");
+                return;
+            }
+
+            const formData = new FormData();
+            formData.append("file", fileInput);
+
+            const response = await fetch("http://localhost:3000/handle_csv", {
+                method: "POST",
+                body: formData
+            });
+
+            const result = await response.json();
+            alert(result.message);
+        });
+
+        document.getElementById("searchForm").addEventListener("submit", async (e) => {
+            e.preventDefault();
+
+            const query = document.getElementById("queryInput").value;
+            if (!query) {
+                alert("Please enter a question.");
+                return;
+            }
+
+            const response = await fetch("http://localhost:3000/search", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ query })
+            });
+
+            const result = await response.json();
+            document.getElementById("output").style.display = "block";
+            document.getElementById("output").innerHTML = `
+                <strong>Best Match:</strong> ${result.best_match.question}<br>
+                <strong>Answer:</strong> ${result.best_match.answer}<br>
+                <strong>Similarity:</strong> ${result.best_match.similarity.toFixed(2)}
+            `;
+        });
+    </script>
+
+</body>
+</html>
