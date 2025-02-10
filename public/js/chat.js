@@ -4,11 +4,10 @@ $(document).ready(function() {
             this.appendHtml();
             this.cacheDom();
             this.bindEvents();
-            this.socket = io();
-            this.socket.on('chat_message', (msg) => this.displayMessage(msg, 'bot'));
-            this.socket.on('set-cookie', (data) => this.setCookie(data.name, data.value));
-            this.loadMessagesFromStorage();
-            window.addEventListener('storage', this.syncMessages.bind(this));
+            this.socket = io( {transports: ["websocket"]});
+            this.initializeSocketEvents();
+            // this.loadMessagesFromStorage();
+            // window.addEventListener('storage', this.syncMessages.bind(this));
             this.showChatButton();
         },
         appendHtml: function() {
@@ -63,33 +62,44 @@ $(document).ready(function() {
             if (userMessage.trim() !== '') {
                 const msgId = Date.now(); // Generate a unique msgId based on the current timestamp
                 const messageElement = this.displayMessage(userMessage, 'user', true);
-                this.saveMessageToStorage(userMessage, 'user');
+                // this.saveMessageToStorage(userMessage, 'user');
                 this.socket.emit('chat_message', { msgId, userMessage }, (response) => {
                     if (response.error) {
-                        this.displayErrorMessage(messageElement, 'Failed to send message');
+                        this.displayErrorMessage('user', response.error);
                     } else {
-                        this.displayMessage(response.message, 'bot');
-                        this.saveMessageToStorage(response.message, 'bot');
                         messageElement.removeClass('blurred');
                     }
+                    this.autoResizeTextarea(); // Reset the height after sending the message
                 });
                 this.$chatInput.val('');
-                this.autoResizeTextarea(); // Reset the height after sending the message
             }
         },
-        displayMessage: function(message, sender, blurred = false) {
+        displayMessage: function(message, sender, isSending = false) {
             const messageElement = $('<div>').addClass('message').addClass(sender).html(message);
-            if (blurred) {
+            if(isSending)
                 messageElement.addClass('blurred');
-            }
             this.$chatBody.append(messageElement);
             this.$chatBody.scrollTop(this.$chatBody[0].scrollHeight);
             return messageElement;
         },
-        displayErrorMessage: function(messageElement, errorMessage) {
-            messageElement.removeClass('blurred').addClass('error');
-            const errorLabel = $('<div>').addClass('error-label').html(errorMessage);
-            messageElement.append(errorLabel);
+        displayTyping: function() {
+            const messageElement = $('<div>').addClass('message').addClass('typing-indicator')
+            .html(`<span class="dot"></span>
+            <span class="dot"></span>
+            <span class="dot"></span>`);
+         
+            this.$chatBody.append(messageElement);
+            this.$chatBody.scrollTop(this.$chatBody[0].scrollHeight);
+            return messageElement;
+        },
+        displaySuggestivePrompts: function(message, sender, blurred = false) {
+     
+        },
+        displayErrorMessage: function(sender, errorMessage) {
+            const errorMessageElement = $('<div>').addClass('message').addClass('error-label').addClass(sender).html(errorMessage);
+            this.$chatBody.append(errorMessageElement);
+            this.$chatBody.scrollTop(this.$chatBody[0].scrollHeight);
+            return errorMessageElement;
         },
         autoResizeTextarea: function() {
             this.$chatInput.css('height', 'auto');
@@ -98,21 +108,34 @@ $(document).ready(function() {
         setCookie: function(name, value) {
             document.cookie = `${name}=${value}; path=/`;
         },
-        saveMessageToStorage: function(message, sender) {
-            const messages = JSON.parse(localStorage.getItem('chatMessages')) || [];
-            messages.push({ message, sender });
-            localStorage.setItem('chatMessages', JSON.stringify(messages));
-            this.syncMessages();
+        initializeSocketEvents: function() {
+            this.socket.on('bot_status', (data) => {
+                if (data.status === 'typing') {
+                    this.displayTyping( );
+                } else if (data.status === 'idle') {
+                    $('.message.typing-indicator').remove(); // Remove the "Bot is typing..." message
+                }
+            });
+            this.socket.on('chat_message', (res) => this.displayMessage(res.message, res.sender));
+            this.socket.on('set-cookie', (data) => this.setCookie(data.name, data.value));
+            this.socket.on('load_chat', (data) => this.loadMessagesFromStorage(data));
         },
-        loadMessagesFromStorage: function() {
-            const messages = JSON.parse(localStorage.getItem('chatMessages')) || [];
+        // saveMessageToStorage: function(message, sender) {
+        //     const messages = JSON.parse(localStorage.getItem('chatMessages')) || [];
+        //     messages.push({ message, sender });
+        //     localStorage.setItem('chatMessages', JSON.stringify(messages));
+        //     this.syncMessages();
+        // },
+        loadMessagesFromStorage: function(messages) {
+            // const messages = JSON.parse(localStorage.getItem('chatMessages')) || [];
+            console.log(messages);
             messages.forEach(msg => this.displayMessage(msg.message, msg.sender));
         },
-        syncMessages: function() {
-            const messages = JSON.parse(localStorage.getItem('chatMessages')) || [];
-            this.$chatBody.empty();
-            messages.forEach(msg => this.displayMessage(msg.message, msg.sender));
-        }
+        // syncMessages: function() {
+        //     const messages = JSON.parse(localStorage.getItem('chatMessages')) || [];
+        //     this.$chatBody.empty();
+        //     messages.forEach(msg => this.displayMessage(msg.message, msg.sender));
+        // }
     };
 
     ChatWidget.init();

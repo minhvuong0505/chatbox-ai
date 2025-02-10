@@ -105,18 +105,18 @@ body {
 }
 
 .message.blurred {
-    filter: blur(2px);
+    filter: blur(0);
     opacity: 0.6;
 }
 
-.message.error {
-    border: 1px solid red;
-}
 
 .error-label {
-    color: red;
+    border: none;
+    background: none !important;
+    color: red !important;
+    padding: 0px 0px 0px 0px;
     font-size: 12px;
-    margin-top: 5px;
+    margin: -5px 0px 5px 0px;
 }
 
 #chatButton {
@@ -152,7 +152,35 @@ body {
         transform: translateY(0);
     }
 }
+.typing-indicator {
+    display: flex;
+    align-items: center;
+    font-size: 18px;
+    font-weight: bold;
+}
 
+.dot {
+    width: 8px;
+    height: 8px;
+    margin-left: 4px;
+    background-color: black;
+    border-radius: 50%;
+    animation: blink 1.5s infinite ease-in-out;
+}
+
+.dot:nth-child(2) {
+    animation-delay: 0.2s;
+}
+
+.dot:nth-child(3) {
+    animation-delay: 0.4s;
+}
+
+@keyframes blink {
+    0% { opacity: 0.3; }
+    50% { opacity: 1; }
+    100% { opacity: 0.3; }
+}
 @media (max-width: 600px) {
     .chat-widget {
         width: 100%;
