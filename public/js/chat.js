@@ -12,8 +12,8 @@ $(document).ready(function() {
             const chatHtml = `
                 <div class="chat-widget" id="chatWidget">
                     <div class="chat-header" id="chatHeader">
-                        <span>Chat with us!</span>
-                        <button id="closeChatButton">✖</button>
+                        <img src="images/bot-avatar.svg">
+                        <span>I am Robot</span>
                     </div>
                     <div class="chat-body" id="chatBody"></div>
                     <div class="chat-footer">
@@ -21,7 +21,14 @@ $(document).ready(function() {
                         <button id="sendButton">➤</button>
                     </div>
                 </div>
-                <button id="chatButton">💬</button>
+                <button id="chatButton">
+                    <div class="open-icon show">
+                        <img src="images/chat-bubble.svg">
+                    </div>
+                    <div class="close-icon" >
+                        <img src="images/close-chat.svg">
+                    </div>
+                </button>
             `;
             $('body').append(chatHtml);
         },
@@ -32,11 +39,9 @@ $(document).ready(function() {
             this.$chatBody = $('#chatBody');
             this.$chatInput = $('#chatInput');
             this.$sendButton = $('#sendButton');
-            this.$closeChatButton = $('#closeChatButton');
         },
         bindEvents: function() {
             this.$chatButton.on('click', this.openChat.bind(this));
-            this.$closeChatButton.on('click', this.closeChat.bind(this));
             this.$sendButton.on('click', this.sendMessage.bind(this));
             // this.$chatInput.on('input', this.autoResizeTextarea.bind(this));
             this.$chatInput.on('keypress', (e) => {
@@ -52,23 +57,31 @@ $(document).ready(function() {
             }, 100);
         },
         openChat: function() {
+            if(this.$chatWidget.hasClass('open')) {
+                this.$chatWidget.removeClass('open');
+                this.$chatButton.find('.close-icon').removeClass('show');
+                this.$chatButton.find('.open-icon').addClass('show');
+                return;
+            }
             this.$chatWidget.addClass('open');
-            this.$chatWidget.css('display', 'flex');
-            this.$chatButton.removeClass('show');
+            this.$chatButton.find('.close-icon').addClass('show');
+            this.$chatButton.find('.open-icon').removeClass('show');
             this.$chatBody.scrollTop(this.$chatBody[0].scrollHeight);
             if(this.$chatBody.find('div').length == 0){
-                this.displayBotTyping();
-                setTimeout(() => {
-                    this.removeBotTyping();
-                    this.displayMessage('Hello! How can I help you today?', 'bot');
-                }, 1000);
+                // this.displayBotTyping();
+                // setTimeout(() => {
+                //     this.removeBotTyping();
+                //     this.displayMessage('Hello! How can I help you today?', 'bot');
+                // }, 1000);
             }
             this.$chatInput.focus();
         },
-        closeChat: function() {
-            this.$chatWidget.removeClass('open');
-            this.$chatWidget.css('display', 'none');
-            this.$chatButton.addClass('show');
+        initChat: function() {
+            this.displayBotTyping();
+            setTimeout(() => {
+                this.removeBotTyping();
+                this.displayMessage('Hello! How can I help you today?', 'bot');
+            }, 1000);
         },
         sendMessage: function() {
             const userMessage = this.$chatInput.val();
@@ -76,11 +89,10 @@ $(document).ready(function() {
                 const messageElement = this.displayMessage(userMessage, 'user', true);
                 this.socket.emit('chat_message', { userMessage }, (response) => {
                     if (response.status == 1) {
-                        // this.displaySuggestivePrompts(response.suggestive_prompts);
+                        messageElement.html(response.sanitize);
                     } else {
                         this.displayErrorMessage('user', response.error);
                     }
-                    this.autoResizeTextarea(); // Reset the height after sending the message
                 });
                 this.$chatInput.val('');
             }
@@ -126,10 +138,13 @@ $(document).ready(function() {
             if (sender === 'bot') {
                 const embeddedMessage = this.quickQuestionsEmbedding(message);
                 embeddedMessage.forEach(part => {
+                    if(typeof part === 'string') 
+                            part = this.escapeHtml(part);
+
                     messageElement.append(part);
                 });
                 let currentHeight = this.$chatBody[0].scrollHeight;
-                let lastMessageHeight = this.$chatBody.find('div:last')[0].scrollHeight;
+                let lastMessageHeight = this.$chatBody.find('div:last').length ? this.$chatBody.find('div:last')[0].scrollHeight : 0;
                 newScrollingPosistion = currentHeight - lastMessageHeight;
             } else {
                 messageElement.html(message);
@@ -137,6 +152,17 @@ $(document).ready(function() {
             this.$chatBody.append(messageElement);
             this.$chatBody.scrollTop(newScrollingPosistion);
             return messageElement;
+        },
+        escapeHtml : function(unsafe) {
+            return unsafe
+                .replace(/&/g, "&amp;")
+                .replace(/</g, "&lt;")
+                .replace(/>/g, "&gt;")
+                .replace(/"/g, "&quot;")
+                .replace(/'/g, "&#039;")
+                .replace(/&lt;br&gt;/g, "<br>")
+                .replace(/&lt;code&gt;/g, "<code>")
+                .replace(/&lt;\/code&gt;/g, "</code>");
         },
         displayBotTyping: function() {
             const messageElement = $('<div>').addClass('message').addClass('bot').addClass('typing-indicator')

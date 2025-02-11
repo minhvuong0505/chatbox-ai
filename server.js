@@ -8,6 +8,7 @@ const axios = require('axios');
 const cors = require("cors");
 const cookieParser = require('cookie-parser');
 const csv = require("csv-parser");
+const sanitizeHtml = require('sanitize-html');
 const fs = require('fs'); // File system module for saving conversations
 const { v4: uuidv4 } = require('uuid');
 const app = express();
@@ -17,10 +18,9 @@ const GEMINI_API_KEY = process.env.GEMINI_API_KEY;
 const { GoogleGenerativeAI } = require("@google/generative-ai");
 const genAI = new GoogleGenerativeAI(GEMINI_API_KEY);
 const model = genAI.getGenerativeModel({ model: "gemini-2.0-flash" });
-
 const { pipeline } = require("@xenova/transformers");
 const multer = require("multer");
-const upload = multer({ dest: "upload_databases/" });
+const upload = multer({ dest: "database/upload_databases/" });
 const server = http.createServer(app);
 const io = socketIo(server, {
     cors: {
@@ -64,11 +64,6 @@ app.post("/handle_csv", upload.single("file"), async (req, res) => {
         res.json({ error: "Failed to upload file" });
     }
 });
-
-// app.get('/sendtest', function(req, res){
-//     res.sendFile(path.join(__dirname, 'public/view/upload_csv.html'));
-// });
-
 
 // API: Search
 app.post("/search", async (req, res) => {
@@ -114,7 +109,7 @@ io.on('connection', (socket) => {
             postProcessMessage(sessionId, responseMessage);
             sessions[sessionId].isProcessing = false;
             // callback({ status: 1, suggestive_prompts: responseMessage.suggestivePrompts });
-            callback({ status: 1 });
+            callback({ status: 1 , sanitize: userMessage.message});
         } catch (error) {
             log('Error sending response', error, sessionId, 'error');
             callback({ status: -1 , error : error});
@@ -128,6 +123,9 @@ async function generateMsgId() {
 
 async function preProcessMessage(sessionId, data) {
     let { userMessage } = data;
+    userMessage = await sanitizeInput(userMessage);
+    if(userMessage == '') 
+        throw new Error("Invalid message");
     let msgId = await generateMsgId();
     let sendingMessage = { msgId, message: userMessage, sender: 'user' };
     let askingTime = new Date().toISOString();
@@ -142,25 +140,30 @@ async function processMessage(sessionId, userMessageParam) {
     let userMessage = userMessageParam.message;
     let responseMessage = {};
     try {
-        const retrievedInfo = await similaritySearch(userMessage, vectorDatabase, 0.6, 4);
+        const retrievedInfo = await similaritySearch(userMessage, vectorDatabase, 0.6, 3);
         log('Retrieved info', retrievedInfo, sessionId, 'info');
         const formattedUserMessage = await tuningMessage(sessionId, userMessage, retrievedInfo);
 
         log('Sending to Gemini API', formattedUserMessage, sessionId, 'info');
         const result = await model.generateContent(formattedUserMessage);
-        responseMessage = await handleBotMessage(sessionId, result.response.text());
 
         log('responseMessage', result.response.text(), sessionId, 'info');
-        log('Suggestive Prompts', responseMessage.suggestivePrompts, sessionId, 'info');
+        responseMessage = await handleBotMessage(result.response.text());
+        if(responseMessage.message == ''){
+            throw new Error('Empty response or syntax error from Gemini API: ' + responseMessage.rawMessage);
+        }
     } catch (error) {
-        log('Error communicating with Gemini API', error, sessionId, 'error');
-        responseMessage.message = 'Sorry, something went wrong!';
+        log('Error processMessage', error, sessionId, 'error');
+        responseMessage.message = 'Sorry, something went wrong! Please try again.';
     }
     return responseMessage;
 }
 
 function postProcessMessage(sessionId, responseMessage) {
     let botData = { msgId: responseMessage.msgId, time: responseMessage.answerTime, message: responseMessage.message, sender: 'bot' };
+    sessions[sessionId].conversation.previousTopic = responseMessage.previousTopic;
+    sessions[sessionId].conversation.summary = responseMessage.summary;
+
     saveMessage(sessionId, botData);
     saveSession(sessionId, sessions[sessionId].conversation);
     log('Save session', sessions[sessionId].conversation, sessionId, 'info');
@@ -187,15 +190,11 @@ async function similaritySearch(query, database, similarityThreshold = 0.7, limi
         const similarity = cosineSimilarity(queryVector, d.embedding);
         return { question: d.question, answer: d.answer, similarity };
     });
-
     // Log raw results before filtering
     // log('Raw results before filtering', rawResults, '', 'info');
-
     const filteredResults = rawResults.filter(d => d.similarity >= similarityThreshold * 1);
-
     // Log filtered results
     // log('Filtered results', filteredResults, '', 'info');
-
     const sortedResults = filteredResults.sort((a, b) => b.similarity - a.similarity);
     let returnResults = sortedResults.slice(0, limit);
     if (returnResults.length > 0) {
@@ -234,47 +233,69 @@ async function loadVectorDatabase(filePath) {
 async function tuningMessage(sessionId, userMessage, retrievedInfo) {
     let previousTopic = sessions[sessionId].conversation.previousTopic;
     let summary = sessions[sessionId].conversation.summary;
-    // let suggestivePromptsOption = sessions[sessionId].conversation.suggestivePromptsOption;
     if(previousTopic == '' || typeof previousTopic == 'undefined'){
         previousTopic = process.env.INITIAL_CHATBOT_TOPIC;
-        // suggestivePromptsOption = "yes";
     }
     let ragPrompt = '';
+    let  = '';
     if(retrievedInfo.length > 0){
-        retrievedInfo.map((info) => {    
+        retrievedInfo.map((info,i) => {    
             const retrievedQuestion = info.question;
             const retrievedAnswered = info.answer;
-            if(info.similarity >= 0.7){
-                ragPrompt += "using exsting RAG_Question and RAG_Answer.\n\nRAG_Question: "+retrievedQuestion+" \n\nRAG_Answer: "+retrievedAnswered+".\n\n Create new suggestive questions follow these questions: \n\n";
+            // if(info.similarity >= 0.7){
+            if(i == 0){
+                ragPrompt += "using existing RAG_Question and RAG_Answer.\n\nRAG_Question: "+retrievedQuestion+" \n\nRAG_Answer: "+retrievedAnswered+".\n\nGenerate **ready-to-use follow-up questions** that user can send immediately to clarify the answer, ask for examples or explore related topics. The questions **must be intended for the user to ask the bot, not for the user to answer**. Each question must start with '*'.\n\n";
             } else {
-                ragPrompt += "Question: "+ retrievedQuestion+'\n\n';
+                ragPrompt += "Related question: "+ retrievedQuestion+'\n\n';
             }
         });
-        
     }
-    const formattedUserMessage =  "User prompt: [" + userMessage + "]\n\nRole description: you should follow the rules, you should follow demand of user, if use give questions then give user concise meaningful and accurate answer "+ragPrompt+".No cumbersome, The answer should include user side's suggestive questions ready to copy to use, questions should start with *.\n\nTopic: "+previousTopic +"\n\nPrevious summary converstation: "+summary+"\n\nSample answer: \n\nChatBot_Answer: [Your answer here] End_ChatBot_Answer \n\nChatBot_Summary: [Summarize interactions] End_ChatBot_Summary \n\nChatBot_Topic: [Converstation topic]";
-
-    // const formattedUserMessage =  "User prompt: " + userMessage + "\n\nRole description: you are assistant, should follow demand of user, if use give questions then give user concise meaningful and accurate answer "+ragPrompt+".\n\nTopic: "+previousTopic +"\n\nPrevious summary converstation: "+summary+"\n\nSample answer: \n\nChatBot_Answer: [Your answer here] End_ChatBot_Answer \n\nChatBot_Summary: [Summarize interactions] End_ChatBot_Summary \n\nChatBot_Topic: [Converstation topic] \n\nAllowed_Craft_Prompts:"+suggestivePromptsOption+" \n\nSuggestive_Prompts: [If user allowed, craft suggestive questions as user angle that incorporate data from the topic. Separeate by asterisk] \n\n";
-
+    const formattedUserMessage =  "User prompt: [" + userMessage + "]\n\nRole description: You are an OWASP domain expert. Follow the user's demand strictly. If the user provides a question, give a **concise, meaningful, and accurate answer**.\n\n"
+        + ragPrompt +
+        "The answer **must include ready-to-use follow-up questions** that the user can copy and send immediately. These questions must start with '*'.\n\n"
+        + "If the answer includes programming code, wrap it with `<code>` and `</code>` tags.\n\n"
+        + "Reserve Topic: "+process.env.INITIAL_CHATBOT_TOPIC+". Topic: "+previousTopic +"\n\n"
+        + "Previous conversation summary: "+summary+"\n\n"
+        + "Sample output:\n\n"
+        + "ChatBot_Answer: [Your answer here] End_ChatBot_Answer\n\n"
+        + "ChatBot_Summary: [Summarize interactions] End_ChatBot_Summary\n\n"
+        + "ChatBot_Topic: [Conversation topic]";
     return formattedUserMessage;
 }
 
-async function handleBotMessage(sessionId, botMessage) {
+async function handleBotMessage(botMessage) {
     let botAnswerMatch = botMessage.match(/ChatBot_Answer:\s*(.*?)\s*End_ChatBot_Answer/s);
     let summaryMatch = botMessage.match(/ChatBot_Summary:\s*(.*?)\s*End_ChatBot_Summary/s);
     let previousTopicMatch = botMessage.match(/ChatBot_Topic:\s*(.*?)\s*$/m);
-    let allowedSuggestivePromptsMatch = botMessage.match(/Allowed_Craft_Prompts:\s*(.*?)\s*$/m);
-    // let suggestivePrompts = botMessage.match(/Suggestive_Prompts:\s*(.*?)\s*$/m);
     let result = {};
+    result.msgId = await generateMsgId();
     result.message = botAnswerMatch ? botAnswerMatch[1].replace(/\n/g, '<br>') : '';
-    // result.suggestivePrompts = suggestivePrompts ? suggestivePrompts[1].split("*").filter(prompt => prompt.trim().endsWith('?')) : '';
+    result.rawMessage = botMessage;
     result.sender = 'bot'; 
     result.answerTime = new Date().toISOString();
-    result.msgId = await generateMsgId();
-    sessions[sessionId].conversation.previousTopic = previousTopicMatch ? previousTopicMatch[1] : '';
-    sessions[sessionId].conversation.summary = summaryMatch ? summaryMatch[1] : '';
-    // sessions[sessionId].conversation.suggestivePromptsOption = allowedSuggestivePromptsMatch ? allowedSuggestivePromptsMatch[1] : '';
+    result.previousTopic = previousTopicMatch ? previousTopicMatch[1] : '';
+    result.summary = summaryMatch ? summaryMatch[1] : '';
     return result;
+}
+
+async function sanitizeInput(input) {
+    if (typeof input !== 'string') return '';
+    // Xóa khoảng trắng dư thừa
+    input = input.trim();
+    // Ngăn chặn XSS bằng cách loại bỏ thẻ script, iframe, object...
+    input = sanitizeHtml(input, {
+        allowedTags: [], // Không cho phép bất kỳ thẻ HTML nào
+        allowedAttributes: {} // Không cho phép thuộc tính HTML nào
+    });
+    // Loại bỏ các ký tự đặc biệt có thể gây SQL/NoSQL Injection
+    input = input.replace(/[\0\x08\x09\x1a\n\r"'\\\%]/g, (char) => {
+        return '\\' + char; // Escape ký tự nguy hiểm
+    });
+    // Ngăn chặn command injection bằng cách loại bỏ ký tự nguy hiểm
+    input = input.replace(/[;&|$><`]/g, '');
+    // Loại bỏ hoặc mã hóa dấu ngoặc nhọn để tránh code injection
+    input = input.replace(/[{}]/g, '');
+    return input;
 }
 
 function saveMessage(sessionId, params) {
