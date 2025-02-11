@@ -7,6 +7,7 @@ body {
     bottom: 20px;
     right: 20px;
     width: 90%;
+    height: 500px;
     max-width: 350px;
     max-height: 500px;
     border: 1px solid #ccc;
@@ -49,7 +50,7 @@ body {
 
 .chat-body {
     flex: 1;
-    padding: 10px;
+    padding: 20px;
     overflow-y: auto;
     display: flex;
     flex-direction: column;
@@ -71,6 +72,7 @@ body {
     outline: none;
     height: 20px;
     overflow: hidden;
+    resize: none;
 }
 
 .chat-footer button {
@@ -82,7 +84,7 @@ body {
 }
 
 .message {
-    margin: 5px 0;
+    margin: 0px 0px 15px 0px;
     padding: 10px;
     border-radius: 20px;
     max-width: 80%;
@@ -162,7 +164,7 @@ body {
 .dot {
     width: 8px;
     height: 8px;
-    margin-left: 4px;
+    margin: 0px 2px;
     background-color: black;
     border-radius: 50%;
     animation: blink 1.5s infinite ease-in-out;
@@ -180,6 +182,18 @@ body {
     0% { opacity: 0.3; }
     50% { opacity: 1; }
     100% { opacity: 0.3; }
+}
+.suggestive-prompts {
+    padding: 20px 20px 0px 20px;
+}
+button.suggestive-prompt {
+    border: none;
+    border-radius: 20px;
+    background: #b7f5b7;
+    margin: 5px;
+    padding: 8px;
+    font-size: 15px;
+    cursor: pointer;
 }
 @media (max-width: 600px) {
     .chat-widget {

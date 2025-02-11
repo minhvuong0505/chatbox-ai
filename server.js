@@ -22,7 +22,6 @@ const { pipeline } = require("@xenova/transformers");
 const multer = require("multer");
 const upload = multer({ dest: "upload_databases/" });
 const server = http.createServer(app);
-// const io = socketIo(server);
 const io = socketIo(server, {
     cors: {
       origin: "*", // Hoặc cấu hình domain cụ thể
@@ -37,7 +36,7 @@ let vectorDatabase = [];
 // Load mô hình khi khởi động server
 async function loadModel() {
     model_transformers = await pipeline("feature-extraction", "Xenova/all-MiniLM-L6-v2");
-    console.log("✅ Model loaded successfully!");
+    log('Model loaded successfully!', '', '', 'system');
 }
 // In-memory storage for sessions
 const sessions = {};
@@ -58,7 +57,7 @@ app.post("/handle_csv", upload.single("file"), async (req, res) => {
         return res.status(400).json({ error: "No file uploaded" });
     }
     const filePath = req.file.path;
-    uploadResult = await loadVectorDatabase(filePath);
+    const uploadResult = await loadVectorDatabase(filePath);
     if(uploadResult){
         res.json({ message: "File uploaded and processed", total: vectorDatabase.length });
     }else{
@@ -66,44 +65,40 @@ app.post("/handle_csv", upload.single("file"), async (req, res) => {
     }
 });
 
+// app.get('/sendtest', function(req, res){
+//     res.sendFile(path.join(__dirname, 'public/view/upload_csv.html'));
+// });
+
+
 // API: Search
 app.post("/search", async (req, res) => {
     const { query } = req.body;
     if (!query) return res.status(400).json({ error: "Missing query" });
-    result = await similaritySearch(query,vectorDatabase);
+    const result = await similaritySearch(query, vectorDatabase);
     res.json({ best_match: result });
 });
 
-
 io.on('connection', (socket) => {
     let sessionId = socket.handshake.headers.cookie && socket.handshake.headers.cookie.split('; ').find(row => row.startsWith('sessionId='))?.split('=')[1];
-    // sessionId = "2025-02-10-03-29_c4bb8042-a58f-4d6a-9035-d80b632778d2"; test sessionId
     if(sessionId){
         recoverConversation(sessionId, socket.id);
         recoverSession(sessionId);
-        sessions[sessionId] = {conversation : []};
+        sessions[sessionId] = {conversation : {}};
     } else {
-    // }
-    // if (!sessionId|| !sessions[sessionId]) {
-       
         let timeId = new Date().toISOString();
         let id = timeId.slice(0, 10).replace(/-/g, "-") +'-'+ timeId.slice(11, 16).replace(":", "-");
         sessionId = id+'_'+uuidv4();
         socket.emit('set-cookie', { name: 'sessionId', value: sessionId });
-        sessions[sessionId] = {conversation : []};
+        sessions[sessionId] = {conversation : {}};
         sessions[sessionId].conversation.previousTopic = '';
         sessions[sessionId].conversation.summary = '';
-        sessions[sessionId].conversation.botQuestion = '';
     }
-    // New user connected
-    console.log(`Socket id  ${socket.id}`);
+    log('User connected', { socketId: socket.id, sessionId }, sessionId, 'info');
     socket.join(sessionId);
-  
-    console.log(`User connected with session ID: ${sessionId}`);
-    // console.log(`User connected with session ID: ${sessions[sessionId].tabs}`);
+
     socket.on('disconnect', () => {
-        socket.leave(sessionId)
-        console.log(`User disconnected with session ID: ${sessionId}`);
+        socket.leave(sessionId);
+        log('User disconnected', { socketId: socket.id, sessionId }, sessionId, 'info');
     });
     
     socket.on('chat_message', async (data, callback) => {
@@ -112,66 +107,74 @@ io.on('connection', (socket) => {
                 throw new Error('Chatbot is processing the previous message');
             }
             sessions[sessionId].isProcessing = true;
-            let userMessage = await preProcessMessage(sessionId,data);
+            let userMessage = await preProcessMessage(sessionId, data);
             socket.broadcast.to(sessionId).emit('chat_message', userMessage);
 
-            let responseMessage = await processMessage(sessionId,userMessage);
-            postProcessMessage(sessionId,responseMessage);
+            let responseMessage = await processMessage(sessionId, userMessage);
+            postProcessMessage(sessionId, responseMessage);
             sessions[sessionId].isProcessing = false;
-            callback({ status: 1, suggestive_prompts: responseMessage.suggestivePrompts });
+            // callback({ status: 1, suggestive_prompts: responseMessage.suggestivePrompts });
+            callback({ status: 1 });
         } catch (error) {
-            console.error('Error sending response:', error);
+            log('Error sending response', error, sessionId, 'error');
             callback({ status: -1 , error : error});
         }
     });
 });
+
 async function generateMsgId() {  
     return Date.now();
 }
-async function preProcessMessage(sessionId,data) {
+
+async function preProcessMessage(sessionId, data) {
     let { userMessage } = data;
     let msgId = await generateMsgId();
-    sendingMessge = { msgId, message: userMessage, sender: 'user' };
+    let sendingMessage = { msgId, message: userMessage, sender: 'user' };
     let askingTime = new Date().toISOString();
-    let userData = {msgId : msgId, time : askingTime, message : userMessage, sender : 'user'};
+    let userData = { msgId, time: askingTime, message: userMessage, sender: 'user' };
     saveMessage(sessionId, userData);
-    return sendingMessge;
+    log('Pre-processed message', userData, sessionId, 'info');
+    return sendingMessage;
 }
-async function processMessage(sessionId,userMessageParam) {
-    io.to(sessionId).emit('bot_status', {status: 'typing'});
+
+async function processMessage(sessionId, userMessageParam) {
+    io.to(sessionId).emit('bot_status', { status: 'typing' });
     let userMessage = userMessageParam.message;
     let responseMessage = {};
     try {
-        retrievedInfo = await similaritySearch(userMessage,vectorDatabase);
-        console.log(retrievedInfo);
-        formattedUserMessage = await tuningMessage(sessionId,userMessage,retrievedInfo);
-        console.log("Sending to Gemini API: ", formattedUserMessage);
+        const retrievedInfo = await similaritySearch(userMessage, vectorDatabase, 0.6, 4);
+        log('Retrieved info', retrievedInfo, sessionId, 'info');
+        const formattedUserMessage = await tuningMessage(sessionId, userMessage, retrievedInfo);
+
+        log('Sending to Gemini API', formattedUserMessage, sessionId, 'info');
         const result = await model.generateContent(formattedUserMessage);
-        responseMessage = await handleBotMessage(sessionId,result.response.text());
-        console.log("Suggestive Prompts: ", responseMessage.suggestivePrompts);
+        responseMessage = await handleBotMessage(sessionId, result.response.text());
+
+        log('responseMessage', result.response.text(), sessionId, 'info');
+        log('Suggestive Prompts', responseMessage.suggestivePrompts, sessionId, 'info');
     } catch (error) {
-        console.error('Error communicating with Gemini API:', error);
+        log('Error communicating with Gemini API', error, sessionId, 'error');
         responseMessage.message = 'Sorry, something went wrong!';
     }
     return responseMessage;
 }
-function postProcessMessage(sessionId,responseMessage) {
-    let botData = {msgId : responseMessage.msgId, time : responseMessage.answerTime, message : responseMessage.message, sender : 'bot'};
-    saveMessage(sessionId, botData);
-    saveSession(sessionId, sessions[sessionId]);
-    console.log("Sending to client: ", sessions);    
-    io.to(sessionId).emit('chat_message', responseMessage);
-    io.to(sessionId).emit('bot_status', {status: 'idle'});
 
+function postProcessMessage(sessionId, responseMessage) {
+    let botData = { msgId: responseMessage.msgId, time: responseMessage.answerTime, message: responseMessage.message, sender: 'bot' };
+    saveMessage(sessionId, botData);
+    saveSession(sessionId, sessions[sessionId].conversation);
+    log('Save session', sessions[sessionId].conversation, sessionId, 'info');
+    io.to(sessionId).emit('chat_message', responseMessage);
+    io.to(sessionId).emit('bot_status', { status: 'idle' });
 }
 
-async function similaritySearch(query, database) {
+async function similaritySearch(query, database, similarityThreshold = 0.7, limit = 1) {
     const queryEmbedding = await model_transformers(query, { pooling: "mean", normalize: true });
     const queryVector = Array.from(queryEmbedding.data); 
     
     const cosineSimilarity = (vecA, vecB) => {
         if (!Array.isArray(vecA) || !Array.isArray(vecB) || vecA.length !== vecB.length) {
-            console.error("❌ Lỗi: Vectors không hợp lệ", vecA, vecB);
+            log('Invalid vectors', { vecA, vecB }, '', 'error');
             return null;
         }
         const dotProduct = vecA.reduce((sum, a, i) => sum + a * vecB[i], 0);
@@ -180,162 +183,180 @@ async function similaritySearch(query, database) {
         return magnitudeA && magnitudeB ? dotProduct / (magnitudeA * magnitudeB) : null;
     };
 
-    const results = database.map(d => {
+    const rawResults = database.map(d => {
         const similarity = cosineSimilarity(queryVector, d.embedding);
         return { question: d.question, answer: d.answer, similarity };
-    }).filter(d => d.similarity !== null)  // ✅ Loại bỏ kết quả lỗi
-      .sort((a, b) => b.similarity - a.similarity);
+    });
 
-    if(results[0].similarity > 0.7)
-        return results[0];
+    // Log raw results before filtering
+    // log('Raw results before filtering', rawResults, '', 'info');
 
-    return { question: "Sorry, I don't understand your question", answer: "Sorry, I don't understand your question", similarity: 0 };
+    const filteredResults = rawResults.filter(d => d.similarity >= similarityThreshold * 1);
+
+    // Log filtered results
+    // log('Filtered results', filteredResults, '', 'info');
+
+    const sortedResults = filteredResults.sort((a, b) => b.similarity - a.similarity);
+    let returnResults = sortedResults.slice(0, limit);
+    if (returnResults.length > 0) {
+        return returnResults;
+    }
+    return { question: '' , answer: '' , similarity: 0 };
 }
-async function loadVectorDatabase(filePath){
+
+async function loadVectorDatabase(filePath) {
     let data = [];
-    fs.createReadStream(filePath)
-        .pipe(csv())
-        .on("data", (row) => {
-            if (row.Question && row.Answer) {
-                data.push({ question: row.Question, answer: row.Answer });
-            }
-        })
-        .on("end", async () => {
-            const embeddings = await model_transformers(data.map(d => d.question), { pooling: "mean", normalize: true });
-        
-            // console.log("🔍 Raw Embeddings:", embeddings);
-
-            vectorDatabase = data.map((d, i) => ({
-                ...d,
-                embedding: Array.isArray(embeddings[i].data) ? embeddings[i].data : Array.from(embeddings[i].data)
-            }));
-        
-            console.log("✅ Database loaded:");
-            return true;
-        });
+    return new Promise((resolve, reject) => {
+        fs.createReadStream(filePath)
+            .pipe(csv())
+            .on("data", (row) => {
+                if (row.Question && row.Answer) {
+                    data.push({ question: row.Question, answer: row.Answer });
+                }
+            })
+            .on("end", async () => {
+                const embeddings = await model_transformers(data.map(d => d.question), { pooling: "mean", normalize: true });
+                vectorDatabase = data.map((d, i) => ({
+                    ...d,
+                    embedding: Array.isArray(embeddings[i].data) ? embeddings[i].data : Array.from(embeddings[i].data)
+                }));
+                // log('Database loaded', vectorDatabase, '', 'system');
+                log('Database loaded', true, '', 'system');
+                resolve(true);
+            })
+            .on("error", (error) => {
+                log('Error loading vector database', error, '', 'error');
+                reject(false);
+            });
+    });
 }
-async function tuningMessage(sessionId,userMessage,retrievedInfo) {
-    previousTopic = sessions[sessionId].conversation.previousTopic;
-    summary = sessions[sessionId].conversation.summary;
+
+async function tuningMessage(sessionId, userMessage, retrievedInfo) {
+    let previousTopic = sessions[sessionId].conversation.previousTopic;
+    let summary = sessions[sessionId].conversation.summary;
+    // let suggestivePromptsOption = sessions[sessionId].conversation.suggestivePromptsOption;
     if(previousTopic == '' || typeof previousTopic == 'undefined'){
         previousTopic = process.env.INITIAL_CHATBOT_TOPIC;
+        // suggestivePromptsOption = "yes";
     }
-    ragPrompt = '';
-    if(retrievedInfo.similarity >= 0.7){
-        retrievedQuestion = retrievedInfo.question;
-        retrievedAnswered = retrievedInfo.answer;
-        ragPrompt = " using exsting RAG_Question and RAG_Answer. \n\n RAG_Question: "+retrievedQuestion+" \n\nRAG_Answer: "+retrievedAnswered+" \n\n";
+    let ragPrompt = '';
+    if(retrievedInfo.length > 0){
+        retrievedInfo.map((info) => {    
+            const retrievedQuestion = info.question;
+            const retrievedAnswered = info.answer;
+            if(info.similarity >= 0.7){
+                ragPrompt += "using exsting RAG_Question and RAG_Answer.\n\nRAG_Question: "+retrievedQuestion+" \n\nRAG_Answer: "+retrievedAnswered+".\n\n Create new suggestive questions follow these questions: \n\n";
+            } else {
+                ragPrompt += "Question: "+ retrievedQuestion+'\n\n';
+            }
+        });
+        
     }
+    const formattedUserMessage =  "User prompt: [" + userMessage + "]\n\nRole description: you should follow the rules, you should follow demand of user, if use give questions then give user concise meaningful and accurate answer "+ragPrompt+".No cumbersome, The answer should include user side's suggestive questions ready to copy to use, questions should start with *.\n\nTopic: "+previousTopic +"\n\nPrevious summary converstation: "+summary+"\n\nSample answer: \n\nChatBot_Answer: [Your answer here] End_ChatBot_Answer \n\nChatBot_Summary: [Summarize interactions] End_ChatBot_Summary \n\nChatBot_Topic: [Converstation topic]";
 
-    formattedUserMessage =  "Prompt: " + userMessage + "\n\nRole description: give concise meaningful and accurate answer "+ragPrompt+"\n\nTopic: "+previousTopic +"\n\nPrevious summary converstation: "+summary+"\n\nSample answer: \n\nChatBot_Answer: [Your answer here] End_ChatBot_Answer \n\nChatBot_Summary: [Summarize all interactions] End_ChatBot_Summary \n\nChatBot_Topic: [Converstation topic] \n\nSuggestive_Prompts: [Craft suggestive prompts as user angle that incorporate data from the topic. Separeate by asterisk] \n\n";
+    // const formattedUserMessage =  "User prompt: " + userMessage + "\n\nRole description: you are assistant, should follow demand of user, if use give questions then give user concise meaningful and accurate answer "+ragPrompt+".\n\nTopic: "+previousTopic +"\n\nPrevious summary converstation: "+summary+"\n\nSample answer: \n\nChatBot_Answer: [Your answer here] End_ChatBot_Answer \n\nChatBot_Summary: [Summarize interactions] End_ChatBot_Summary \n\nChatBot_Topic: [Converstation topic] \n\nAllowed_Craft_Prompts:"+suggestivePromptsOption+" \n\nSuggestive_Prompts: [If user allowed, craft suggestive questions as user angle that incorporate data from the topic. Separeate by asterisk] \n\n";
 
-    return formattedUserMessage
+    return formattedUserMessage;
 }
-async function handleBotMessage(sessionId,botMessage) {
+
+async function handleBotMessage(sessionId, botMessage) {
     let botAnswerMatch = botMessage.match(/ChatBot_Answer:\s*(.*?)\s*End_ChatBot_Answer/s);
     let summaryMatch = botMessage.match(/ChatBot_Summary:\s*(.*?)\s*End_ChatBot_Summary/s);
     let previousTopicMatch = botMessage.match(/ChatBot_Topic:\s*(.*?)\s*$/m);
-    let suggestivePrompts = botMessage.match(/Suggestive_Prompts:\s*(.*?)\s*$/m);
+    let allowedSuggestivePromptsMatch = botMessage.match(/Allowed_Craft_Prompts:\s*(.*?)\s*$/m);
+    // let suggestivePrompts = botMessage.match(/Suggestive_Prompts:\s*(.*?)\s*$/m);
     let result = {};
     result.message = botAnswerMatch ? botAnswerMatch[1].replace(/\n/g, '<br>') : '';
-    result.suggestivePrompts = suggestivePrompts ? suggestivePrompts[1].split("*") : ''; 
+    // result.suggestivePrompts = suggestivePrompts ? suggestivePrompts[1].split("*").filter(prompt => prompt.trim().endsWith('?')) : '';
     result.sender = 'bot'; 
     result.answerTime = new Date().toISOString();
     result.msgId = await generateMsgId();
     sessions[sessionId].conversation.previousTopic = previousTopicMatch ? previousTopicMatch[1] : '';
     sessions[sessionId].conversation.summary = summaryMatch ? summaryMatch[1] : '';
+    // sessions[sessionId].conversation.suggestivePromptsOption = allowedSuggestivePromptsMatch ? allowedSuggestivePromptsMatch[1] : '';
     return result;
 }
+
 function saveMessage(sessionId, params) {
-    const filePath = path.join(__dirname, 'database/conversations', `${sessionId}.log`);
-    const logEntry = JSON.stringify(params);
+    const filePath = path.join(__dirname, 'database/conversations', `${sessionId}`);
+    const logEntry = JSON.stringify(params) + ',';
     writeDataToFile(filePath, logEntry);
 }
 
-function recoverConversation(sessionId,socketId) {
-    const filePath = path.join(__dirname, 'database/conversations', `${sessionId}.log`);
-    // Kiểm tra xem file có tồn tại không
+function recoverConversation(sessionId, socketId) {
+    const filePath = path.join(__dirname, 'database/conversations', `${sessionId}`);
     if (!fs.existsSync(filePath)) {
-        console.error(`File ${filePath} không tồn tại`);
+        log('File does not exist', filePath, sessionId, 'error');
         return;
     }
-    // Đọc nội dung file
     fs.readFile(filePath, 'utf8', (err, data) => {
         if (err) {
-            console.error('Error reading file:', err);
+            log('Error reading file', err, sessionId, 'error');
             return;
         }
-        // Loại bỏ dấu phẩy cuối cùng và đóng mảng JSON bằng dấu ]
         const cleanedData = data.trim().replace(/,$/, '') + ']';
-        console.log('Cleaned data:', cleanedData);
+        // log('Cleaned data', cleanedData, sessionId, 'info');
         try {
-            // Chuyển đổi dữ liệu thành mảng JSON
             const conversation = JSON.parse(`[${cleanedData}`);
-            // console.log('Loaded conversation:', conversation);
             io.to(socketId).emit('load_chat', conversation);
-            return true;
+            log('Loaded conversation', true , sessionId, 'info');
+            // log('Loaded conversation', conversation, sessionId, 'info');
         } catch (e) {
-            console.error('Error parsing JSON:', e);
+            log('Error parsing JSON', e, sessionId, 'error');
         }
     });
-    return false;
 }
 
-function saveSession(sessionId, params) {
-    return
-    const filePath = path.join(__dirname, 'logs/conversations', `${sessionId}.session.log`);
-    const logEntry = JSON.stringify(params);
-    // if (!fs.existsSync(filePath))  fs.appendFile(filePath, `[`, (err) => {});
-    fs.writeFile(filePath, `${logEntry},`, (err) => {
-    // fs.appendFile(filePath, `${logEntry},`, (err) => {
+function saveSession(sessionId, logEntry) {
+    let filePath = path.join(__dirname, 'database/sessions', `${sessionId}`);
+    console.log('Saving session 1', logEntry);
+    logEntry = JSON.stringify(logEntry);
+    console.log('Saving session 2', logEntry);
+    fs.writeFile(filePath, logEntry, (err) => {
         if (err) {
-            console.error('Error saving conversation to log:', err);
+            log('Error saving session to log', err, sessionId, 'error');
         } else {
-            console.log(`Conversation saved to ${filePath}`);
+            log('Session saved', filePath, sessionId, 'info');
         }
     });
 }
+
 function recoverSession(sessionId) {
-    return
-    const filePath = path.join(__dirname, 'logs/conversations', `${sessionId}.session.log`);
-    // Kiểm tra xem file có tồn tại không
+    const filePath = path.join(__dirname, 'database/sessions', `${sessionId}`);
     if (!fs.existsSync(filePath)) {
-        console.error(`File ${filePath} không tồn tại`);
+        log('File does not exist', filePath, sessionId, 'error');
         return;
     }
-    // Đọc nội dung file
     fs.readFile(filePath, 'utf8', (err, data) => {
         if (err) {
-            console.error('Error reading file:', err);
+            log('Error reading file', err, sessionId, 'error');
             return;
         }
-        // Loại bỏ dấu phẩy cuối cùng và đóng mảng JSON bằng dấu ]
         const cleanedData = data.trim();
-        console.log('Cleaned data:', cleanedData);
         try {
-            // Chuyển đổi dữ liệu thành mảng JSON
             const session = JSON.parse(`${cleanedData}`);
-            console.log('Loaded session:', session);
-            sessions[sessionId] = session;
-            return true;
+            sessions[sessionId].conversation = session;
+            log('Loaded session', session, sessionId, 'info');
         } catch (e) {
-            console.error('Error parsing JSON:', e);
+            log('Error parsing JSON', e, sessionId, 'error');
         }
     });
-    return false;
 }
+
 function log(label, value, sessionId = '', type = 'info') {
     let time = new Date().toISOString();
-    console.log(`${time} ${type} [${label}]`, value);  
+    if (process.env.DEBUG) 
+        console.log(`${time} ${type} [${label}]`, value);  
     let filePath = '';
     value = JSON.stringify(value);
-    let logEntry = `${time} ${type} [${label}] ` + value;
+    let logEntry = `${time} [${label}] ` + value + '\n';
     switch (type) {
         case 'error':
+            console.log(`${time} ${type} [${label}]`, value);  
             filePath = path.join(__dirname, 'logs/', `${type}.log`);
             break;
         case 'info':
-            filePath = path.join(__dirname, 'logs/debug_conversations', `${sessionId}.${info}.log`);
+            filePath = path.join(__dirname, 'logs/debug_conversations', `${sessionId}.${type}.log`);
             break;
         case 'system':
             filePath = path.join(__dirname, 'logs/', `${type}.log`);
@@ -345,20 +366,20 @@ function log(label, value, sessionId = '', type = 'info') {
 }
 
 function writeDataToFile(filePath, logEntry) {
-    fs.appendFile(filePath, `${logEntry},`, (err) => {
+    fs.appendFile(filePath, `${logEntry}`, (err) => {
         if (err) {
             console.error('Error saving conversation to log:', err);
         } else {
-            console.log(`Conversation saved to ${filePath}`);
+            // console.log(`Conversation saved to ${filePath}`);
         }
     });
 }
 
 server.listen(process.env.PORT, async function(error){
     if (error) {
-        console.log("Something went wrong");
+        log('Server error', error, '', 'error');
     }
     await loadModel();
     await loadVectorDatabase(process.env.INITIAL_DATABASE);
-    console.log("Server is running on port: " + process.env.PORT);
+    log('Server is running', `on port: ${process.env.PORT}`, '', 'system');
 });
