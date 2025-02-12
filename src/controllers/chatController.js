@@ -9,7 +9,7 @@ class ChatController {
     }
 
     async handleMessage(socket, data, callback, ioSocketServer) {
-        const sessionId = this.getSessionId(socket)
+        const sessionId = await this.getSessionId(socket)
         const session = this.sessionService.sessions[sessionId];
         try {
             if (session.isProcessing) {
