@@ -74,7 +74,7 @@ $(document).ready(function() {
                 //     this.displayMessage('Hello! How can I help you today?', 'bot');
                 // }, 1000);
             // }
-            this.$chatInput.focus();
+            // this.$chatInput.focus();
         },
         initChat: function() {
             this.displayBotTyping();
