@@ -16,49 +16,6 @@ The Gemini Chatbot is an OWASP domain expert chatbot designed to assist users wi
 - **Sanitize-HTML**: For sanitizing user inputs.
 - **UUID**: For generating unique session IDs.
 
-## Project Structure
-
-|-- .env
-|-- .env_example
-|-- .gitignore
-|-- README.md
-|-- app.js
-|-- config
-|   |-- config.js
-|-- controllers
-|   |-- chatController.js
-|-- database
-|   |-- conversations
-|   |-- owasp_qa_with_answers.csv
-|   |-- sessions
-|   |-- upload_databases
-|       |-- vectorDB
-|           |-- owasp_qa_with_answers.csv
-|-- index.js
-|-- logs
-|   |-- debug_conversations
-|   |-- error.log
-|   |-- system.log
-|-- old_server.js
-|-- package.json
-|-- public
-|   |-- images
-|   |-- js
-|       |-- chat.js
-|   |-- styles
-|       |-- style.css
-|   |-- view
-|       |-- index.html
-|-- services
-|   |-- messageService.js
-|   |-- modelService.js
-|   |-- sessionService.js
-|   |-- vectorDatabaseService.js
-|-- test.js
-|-- utils
-    |-- logger.js
-    |-- memoryMonitor.js
-
 ## Frontend Description
 
 The frontend of the Gemini Chatbot is a simple web interface that allows users to interact with the chatbot. It is built using HTML, CSS, and JavaScript, and it leverages Socket.io for real-time communication with the server.
