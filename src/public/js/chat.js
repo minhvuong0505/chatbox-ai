@@ -236,6 +236,7 @@ $(document).ready(function() {
             });
         },
         loadMessagesFromStorage: function(messages) {
+            if(messages.length == 0) return;
             messages.forEach((msg) => {
                 this.displayMessage(msg.message, msg.sender);
             });
