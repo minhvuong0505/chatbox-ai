@@ -74,7 +74,10 @@ $(document).ready(function() {
                 //     this.displayMessage('Hello! How can I help you today?', 'bot');
                 // }, 1000);
             }
-            this.$chatInput.focus();
+            setTimeout(() => {
+                this.$chatInput.focus();
+            }, 300);
+          
         },
         initChat: function() {
             this.displayBotTyping();
