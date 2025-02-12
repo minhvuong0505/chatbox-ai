@@ -61,7 +61,7 @@ class MessageService {
         let ragPrompt = "";
         let ragRelatedQuestion = "Another related topic to consider: ";
         if(retrievedInfo.length > 0) {
-            ragPrompt += `Here is relevant background information that may help answer the user's question. Summarize and explain it in your own words:\n` +
+            ragPrompt += `Here is relevant background information that may help answer the user's question. Follow the Sample out bellow, Summarize and explain it in your own words:\n` +
             `RAG_Question: ${retrievedInfo[0].question}\n`+
             `RAG_Answer: ${retrievedInfo[0].answer}.\n`+
             `Generate **ready-to-use follow-up questions** that user can send immediately to clarify the answer, ask for examples or explore related topics. The questions **must be intended for the user to ask the bot, not for the user to answer**. Each question must start with '*'.\n`;
