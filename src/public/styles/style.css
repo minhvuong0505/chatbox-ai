@@ -9,7 +9,7 @@ body {
     width: 90%;
     height: 100%;
     max-width: 30vw;
-    max-height: 75vh;
+    max-height: 80vh;
     border-radius: 0.625rem;
     /* 10px */
     box-shadow: 0 0 0.525rem rgba(0, 0, 0, 0.2);
@@ -285,7 +285,7 @@ a.suggestive-prompt {
     .chat-widget {
         max-width: 86vw;
         height: 80%;
-        max-height: 65vh;
+        max-height: 80vh;
         bottom: 6rem;
         right: 7%;
     }
@@ -337,7 +337,7 @@ a.suggestive-prompt {
     .chat-widget {
         max-width: 70vw;
         height: 80%;
-        max-height: 65vh;
+        max-height: 75vh;
         bottom: 6rem;
         right: 3%;
     }
