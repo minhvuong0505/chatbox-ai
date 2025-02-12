@@ -67,17 +67,14 @@ $(document).ready(function() {
             this.$chatButton.find('.close-icon').addClass('show');
             this.$chatButton.find('.open-icon').removeClass('show');
             this.$chatBody.scrollTop(this.$chatBody[0].scrollHeight);
-            if(this.$chatBody.find('div').length == 0){
+            // if(this.$chatBody.find('div').length == 0){
                 // this.displayBotTyping();
                 // setTimeout(() => {
                 //     this.removeBotTyping();
                 //     this.displayMessage('Hello! How can I help you today?', 'bot');
                 // }, 1000);
-            }
-            setTimeout(() => {
-                this.$chatInput.focus();
-            }, 300);
-          
+            // }
+            this.$chatInput.focus();
         },
         initChat: function() {
             this.displayBotTyping();
