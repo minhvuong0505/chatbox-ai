@@ -107,14 +107,17 @@ class App {
     }
 
     async handleSocketConnection(socket) {
-        let sessionId = await this.chatController.getSessionId(socket);
+        let sessionId = await this.sessionService.getSessionId(socket);
         console.log('sessionId', sessionId);    
-        
-        if (!sessionId) {
-            sessionId = this.sessionService.generateSessionId();
+
+        if (typeof sessionId == 'undefined') {
+            console.log('enter here', sessionId);   
+            sessionId = await this.sessionService.generateSessionId();
+            console.log('sessionId', sessionId);  
             socket.emit('set-cookie', { name: 'sessionId', value: sessionId });
             await this.sessionService.createSession(sessionId);
         } else {
+            console.log('enter here 22', sessionId);   
             await this.recoverUserSession(sessionId, socket.id);
         }
 
@@ -135,7 +138,7 @@ class App {
 
         socket.on('chat_message', (data, callback) => {
             this.io.to(sessionId).emit('bot_status', { status: 'typing' });
-            this.chatController.handleMessage(socket, data, callback, this.io);
+            this.chatController.handleMessage(sessionId, data, callback, socket, this.io);
         });
     }
 
