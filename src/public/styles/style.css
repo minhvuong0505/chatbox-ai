@@ -290,8 +290,8 @@ a.suggestive-prompt {
         max-width: 86vw;
         max-height: 140vw;
         height: 100%;
-        bottom: 23vw;
-        right: 5vw;
+        bottom: 24vw;
+        right: 7vw;
     }
 
     .chat-footer {
@@ -322,7 +322,7 @@ a.suggestive-prompt {
 
     #chatButton {
         bottom: 5vw;
-        right: 5vw;
+        right: 6vw;
     }
 }
 
