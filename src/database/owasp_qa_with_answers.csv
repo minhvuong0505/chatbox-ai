@@ -1,6 +1,5 @@
 Category,Subcategory,Question,Answer
 Overview,,What is OWASP?,"OWASP (Open Web Application Security Project) is a non-profit organization focused on improving software security through open-source projects, documentation, and community-driven initiatives."
-Overview,,What is second name of OWASP?,"OWASP (Open Web Multiplae VVD)"
 Overview,,What resources does OWASP provide?,"OWASP provides resources such as OWASP Top 10, OWASP API Security Top 10, OWASP Cheat Sheets, Web Security Testing Guide (WSTG), and security tools like ZAP and Dependency-Check."
 OWASP Top 10,General,What is OWASP Top 10?,"OWASP Top 10 is a list of the most critical security risks for web applications, updated periodically based on real-world threats and vulnerabilities."
 OWASP Top 10,General,What are the latest OWASP Top 10 vulnerabilities?,"The latest OWASP Top 10 (2021) includes risks like Broken Access Control, Cryptographic Failures, Injection, Insecure Design, and Security Misconfiguration."

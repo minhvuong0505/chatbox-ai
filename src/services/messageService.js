@@ -5,12 +5,10 @@ const Logger = require('../utils/logger');
 const config = require('../config/config'); 
 
 class MessageService {
-    constructor() {
-    }
 
-    async processMessage(session, sanitizedMessage, retrievedInfo) {
+    processMessage(session, sanitizedMessage, retrievedInfo) {
         const msgId = Date.now();
-        const formattedMessage = await this.formatMessage(session, sanitizedMessage, retrievedInfo);       
+        const formattedMessage = this.formatMessage(session, sanitizedMessage, retrievedInfo);       
         return {
             msgId,
             message: sanitizedMessage,
@@ -30,12 +28,12 @@ class MessageService {
         .replace(/[;&|$><`{}]/g, '');
     }
 
-    async saveMessage(sessionId, message) {
+    saveMessage(sessionId, message) {
         const filePath = path.join(__dirname, '../database/conversations', sessionId);
         const logEntry = JSON.stringify(message) + ',';
         
         try {
-            await fs.promises.appendFile(filePath, logEntry);
+            fs.promises.appendFile(filePath, logEntry);
             Logger.log('Message saved', message, sessionId, 'info');
         } catch (error) {
             Logger.log('Error saving message', error, sessionId, 'error');
@@ -60,15 +58,20 @@ class MessageService {
 
     formatMessage(session, message, retrievedInfo) {
         const { previousTopic = '', summary = '' } = session.conversation;
-
-        let ragPrompt = retrievedInfo.map((info, i) => {
-            if (i === 0) {
-                return `Here is relevant background information that may help answer the user's question. Summarize and explain it in your own words:\n\n RAG_Question: ${info.question} \n\nRAG_Answer: ${info.answer}.\n\nGenerate **ready-to-use follow-up questions** that user can send immediately to clarify the answer, ask for examples or explore related topics. The questions **must be intended for the user to ask the bot, not for the user to answer**. Each question must start with '*'.\n\n`;
-            }
-            return `Another related topic to consider: ${info.question}\n\n`;
-        }).join('');
-
-        return `User prompt: "${message}"\n\n` +
+        let ragPrompt = "";
+        let ragRelatedQuestion = "Another related topic to consider: ";
+        if(retrievedInfo.length > 0) {
+            ragPrompt += `Here is relevant background information that may help answer the user's question. Summarize and explain it in your own words:\n` +
+            `RAG_Question: ${retrievedInfo[0].question}\n`+
+            `RAG_Answer: ${retrievedInfo[0].answer}.\n`+
+            `Generate **ready-to-use follow-up questions** that user can send immediately to clarify the answer, ask for examples or explore related topics. The questions **must be intended for the user to ask the bot, not for the user to answer**. Each question must start with '*'.\n`;
+            retrievedInfo.shift();
+            retrievedInfo.map((info, i) => {
+                ragRelatedQuestion += `${info.question} `;
+            });
+        }
+        ragPrompt += ragRelatedQuestion +"\n\n";
+        let processedPrompt =  `User prompt: "${message}"\n\n` +
                `Role description: You are an OWASP domain expert. Follow the user's demand strictly. If the user provides a question, give a **concise, meaningful, and accurate answer**.\n\n` +
                ragPrompt +
                `The answer **must include ready-to-use follow-up questions** that the user can copy and send immediately. These questions must start with '*'.\n\n` +
@@ -79,6 +82,8 @@ class MessageService {
                `ChatBot_Answer: [Your answer here] End_ChatBot_Answer\n\n` +
                `ChatBot_Summary: [Summarize interactions] End_ChatBot_Summary\n\n` +
                `ChatBot_Topic: [Conversation topic]`;
+
+            return processedPrompt;
     }
 }
 

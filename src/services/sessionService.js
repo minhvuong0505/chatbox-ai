@@ -60,6 +60,14 @@ class SessionService {
                   timeId.slice(11, 16).replace(":", "-");
         return `${id}_${require('uuid').v4()}`;
     }
+
+    getSessionId(socket) {
+        let sessionId =  socket.handshake.headers.cookie?.split('; ')
+            .find(row => row.startsWith('sessionId='))
+            ?.split('=')[1];
+            console.log('getSessionId' ,sessionId )
+        return sessionId;
+    }
 }
 
 module.exports = SessionService;

@@ -8,8 +8,7 @@ class ChatController {
         this.vectorDatabaseService = vectorDatabaseService;
     }
 
-    async handleMessage(socket, data, callback, ioSocketServer) {
-        const sessionId = await this.getSessionId(socket)
+    async handleMessage(sessionId,data, callback, sessionSocket, ioSocketServer) {
         const session = this.sessionService.sessions[sessionId];
         try {
             if (session.isProcessing) {
@@ -23,9 +22,11 @@ class ChatController {
             const userMessageParam = {sender: 'user',answerTime: new Date().toISOString(), message: sanitizedMessage}
 
             this.messageService.saveMessage(sessionId,userMessageParam);
-            socket.broadcast.to(sessionId).emit('chat_message',userMessageParam);
+            sessionSocket.broadcast.to(sessionId).emit('chat_message',userMessageParam);
 
-            const retrievedInfoRAG = await this.vectorDatabaseService.search(sanitizedMessage);
+            const retrievedInfoRAG = await this.vectorDatabaseService.search(sanitizedMessage,0.5,3);
+            Logger.log('retrieved Info RAG', retrievedInfoRAG, sessionId, 'info');
+
             const processedMessage = await this.messageService.processMessage(
                 session,
                 sanitizedMessage,
@@ -45,6 +46,7 @@ class ChatController {
 
             callback({ status: 1, sanitize: sanitizedMessage });
         } catch (error) {
+            this.sessionService.sessions[sessionId].isProcessing = false
             session.isProcessing = false;
             Logger.log('Error handling message', error, sessionId, 'error');
             callback({ status: -1, error: error.message });
@@ -110,11 +112,7 @@ class ChatController {
         return errorParams;
     }
 
-    getSessionId(socket) {
-        return socket.handshake.headers.cookie?.split('; ')
-            .find(row => row.startsWith('sessionId='))
-            ?.split('=')[1];
-    }
+ 
 }
 
 module.exports = ChatController;

@@ -57,7 +57,7 @@ class VectorDatabaseService {
             .sort((a, b) => b.similarity - a.similarity)
             .slice(0, limit);
 
-        return results.length > 0 ? results : [{ question: '', answer: '', similarity: 0 }];
+        return results.length > 0 ? results : [];
     }
 
     cosineSimilarity(vecA, vecB) {
