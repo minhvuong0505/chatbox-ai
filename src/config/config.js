@@ -1,5 +1,7 @@
 require('dotenv').config();
-
+if(!process.env.GEMINI_API_KEY || !process.env.INITIAL_CHATBOT_TOPIC || !process.env.INITIAL_DATABASE){
+    console.log("Please check your config!");
+}
 const config = {
     port: process.env.PORT,
     geminiApiKey: process.env.GEMINI_API_KEY,
