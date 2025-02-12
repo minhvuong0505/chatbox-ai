@@ -107,7 +107,7 @@ class App {
     }
 
     async handleSocketConnection(socket) {
-        let sessionId = this.chatController.getSessionId(socket);
+        let sessionId = await this.chatController.getSessionId(socket);
         console.log('sessionId', sessionId);    
         
         if (!sessionId) {
