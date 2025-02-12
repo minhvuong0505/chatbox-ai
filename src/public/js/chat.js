@@ -99,7 +99,9 @@ $(document).ready(function() {
             }
         },
         quickQuestionsEmbedding: function(message) {
-            const questionPattern = /\*([^*?]+)\?/g;
+            // const questionPattern = /\*([^*?]*(?!<br>)[^*?]*)\?/g;
+            const questionPattern = /\*([^*?\n<>]*(?:<(?!br>)[^<>]*>[^*?\n<>]*)*)\?/g;
+            
             let match;
             const parts = [];
             let lastIndex = 0;
