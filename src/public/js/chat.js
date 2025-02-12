@@ -13,7 +13,7 @@ $(document).ready(function() {
                 <div class="chat-widget" id="chatWidget">
                     <div class="chat-header" id="chatHeader">
                         <img src="images/bot-avatar.svg">
-                        <span>I am Robot</span>
+                        <span>I am Hooman</span>
                     </div>
                     <div class="chat-body" id="chatBody"></div>
                     <div class="chat-footer">
