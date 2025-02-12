@@ -39,7 +39,9 @@ class App {
         await this.modelService.initialize();
 
         this.vectorDatabaseService = new VectorDatabaseService(this.modelService);
-        await this.vectorDatabaseService.loadFromCsv(config.initialDatabase);
+        if(config.initialDatabase){
+            await this.vectorDatabaseService.loadFromCsv(config.initialDatabase);
+        }
 
         this.sessionService = new SessionService();
         this.messageService = new MessageService();
