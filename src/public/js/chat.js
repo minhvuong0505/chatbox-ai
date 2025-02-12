@@ -74,7 +74,8 @@ $(document).ready(function() {
                 //     this.displayMessage('Hello! How can I help you today?', 'bot');
                 // }, 1000);
             // }
-            // this.$chatInput.focus();
+            if(this.detectDevice() == 'desktop')
+                this.$chatInput.focus();
         },
         initChat: function() {
             this.displayBotTyping();
@@ -240,7 +241,17 @@ $(document).ready(function() {
             messages.forEach((msg) => {
                 this.displayMessage(msg.message, msg.sender);
             });
-        }
+        },
+        detectDevice: function() {
+            const userAgent = navigator.userAgent || navigator.vendor || window.opera;
+            if (/iPad|iPhone|iPod/.test(userAgent) && !window.MSStream) {
+                return 'phone';
+            }
+            if (/android/i.test(userAgent)) {
+                return 'phone';
+            }
+            return 'desktop';
+        },
     };
 
     ChatWidget.init();
