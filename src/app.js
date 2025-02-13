@@ -65,39 +65,40 @@ class App {
             res.sendFile(path.join(__dirname, 'public/view/index.html'));
         });
 
-        this.app.get('/upload_csv', (req, res) => {
-            res.sendFile(path.join(__dirname, 'public/view/upload_csv.html'));
-        });
+        // Upload csv file to vector DB. Disable for now
+        // this.app.get('/upload_csv', (req, res) => {
+        //     res.sendFile(path.join(__dirname, 'public/view/upload_csv.html'));
+        // });
 
-        this.app.post("/handle_csv", this.upload.single("file"), async (req, res) => {
-            if (!req.file) {
-                return res.status(400).json({ error: "No file uploaded" });
-            }
+        // this.app.post("/handle_csv", this.upload.single("file"), async (req, res) => {
+        //     if (!req.file) {
+        //         return res.status(400).json({ error: "No file uploaded" });
+        //     }
 
-            try {
-                await this.vectorDatabaseService.loadFromCsv(req.file.path);
-                res.json({ 
-                    message: "File uploaded and processed", 
-                    total: this.vectorDatabaseService.database.length 
-                });
-            } catch (error) {
-                res.status(500).json({ error: "Failed to upload file" });
-            }
-        });
+        //     try {
+        //         await this.vectorDatabaseService.loadFromCsv(req.file.path);
+        //         res.json({ 
+        //             message: "File uploaded and processed", 
+        //             total: this.vectorDatabaseService.database.length 
+        //         });
+        //     } catch (error) {
+        //         res.status(500).json({ error: "Failed to upload file" });
+        //     }
+        // });
 
-        this.app.post("/search", async (req, res) => {
-            const { query } = req.body;
-            if (!query) {
-                return res.status(400).json({ error: "Missing query" });
-            }
+        // this.app.post("/search", async (req, res) => {
+        //     const { query } = req.body;
+        //     if (!query) {
+        //         return res.status(400).json({ error: "Missing query" });
+        //     }
 
-            try {
-                const result = await this.vectorDatabaseService.search(query);
-                res.json({ best_match: result });
-            } catch (error) {
-                res.status(500).json({ error: "Search failed" });
-            }
-        });
+        //     try {
+        //         const result = await this.vectorDatabaseService.search(query);
+        //         res.json({ best_match: result });
+        //     } catch (error) {
+        //         res.status(500).json({ error: "Search failed" });
+        //     }
+        // });
     }
 
     setupWebSocket() {
@@ -111,13 +112,11 @@ class App {
         console.log('sessionId', sessionId);    
 
         if (typeof sessionId == 'undefined') {
-            console.log('enter here', sessionId);   
             sessionId = await this.sessionService.generateSessionId();
             console.log('sessionId', sessionId);  
             socket.emit('set-cookie', { name: 'sessionId', value: sessionId });
             await this.sessionService.createSession(sessionId);
         } else {
-            console.log('enter here 22', sessionId);   
             await this.recoverUserSession(sessionId, socket.id);
         }
 
@@ -136,9 +135,12 @@ class App {
             Logger.log('User disconnected', { socketId: socket.id, sessionId }, sessionId, 'info');
         });
 
-        socket.on('chat_message', (data, callback) => {
+        socket.on('chat_message', async (data, callback) => {
             this.io.to(sessionId).emit('bot_status', { status: 'typing' });
-            this.chatController.handleMessage(sessionId, data, callback, socket, this.io);
+            let botMessageParam = await this.chatController.handleMessage(sessionId, data, callback, socket);
+            if(botMessageParam)
+                this.io.to(sessionId).emit('chat_message', botMessageParam);
+            this.io.to(sessionId).emit('bot_status', { status: 'idle' });
         });
     }
 

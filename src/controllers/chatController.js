@@ -8,7 +8,7 @@ class ChatController {
         this.vectorDatabaseService = vectorDatabaseService;
     }
 
-    async handleMessage(sessionId,data, callback, sessionSocket, ioSocketServer) {
+    async handleMessage(sessionId,data, callback, sessionSocket) {
         const session = this.sessionService.sessions[sessionId];
         try {
             if (session.isProcessing) {
@@ -16,37 +16,31 @@ class ChatController {
             }
             session.isProcessing = true;
             const sanitizedMessage = await this.messageService.sanitizeInput(data.userMessage);
-            if(sanitizedMessage == 'test') throw new Error('Invalid message');
             if (!sanitizedMessage) 
                 throw new Error('Invalid message');
-            const userMessageParam = {sender: 'user',answerTime: new Date().toISOString(), message: sanitizedMessage}
 
+            const userMessageParam = {sender: 'user',answerTime: new Date().toISOString(), message: sanitizedMessage}
             this.messageService.saveMessage(sessionId,userMessageParam);
+            // Broadcast to other tabs
             sessionSocket.broadcast.to(sessionId).emit('chat_message',userMessageParam);
 
+            // Similarity search
             const retrievedInfoRAG = await this.vectorDatabaseService.search(sanitizedMessage,0.5,3);
             Logger.log('retrieved Info RAG', retrievedInfoRAG, sessionId, 'info');
 
-            const processedMessage = await this.messageService.processMessage(
-                session,
-                sanitizedMessage,
-                retrievedInfoRAG
-            );
+            const processedMessage = await this.messageService.processMessage(session,sanitizedMessage,retrievedInfoRAG);
             
             const botResponse = await this.generateBotResponse(sessionId, processedMessage);
             const botMessageParam = {sender: 'bot',answerTime: botResponse.answerTime, message: botResponse.message}
             this.messageService.saveMessage(sessionId, botMessageParam );
-            if(!botResponse.error)
+            if(!botResponse.error)  
                 this.sessionService.saveSession(sessionId, botResponse);
             
             session.isProcessing = false;
             Logger.log('Bot response', botResponse, sessionId, 'info');
-            ioSocketServer.to(sessionId).emit('chat_message', botMessageParam);
-            ioSocketServer.to(sessionId).emit('bot_status', { status: 'idle' });
-
             callback({ status: 1, sanitize: sanitizedMessage });
+            return botMessageParam;
         } catch (error) {
-            this.sessionService.sessions[sessionId].isProcessing = false
             session.isProcessing = false;
             Logger.log('Error handling message', error, sessionId, 'error');
             callback({ status: -1, error: error.message });
